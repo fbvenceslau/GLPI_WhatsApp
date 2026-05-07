@@ -1,0 +1,37 @@
+# Ambiente
+# .env
+# .env.local
+# .env.*.local
+
+# Node
+node_modules/
+npm-debug.log*
+
+# TypeScript
+dist/
+*.tsbuildinfo
+
+# Next.js
+.next/
+out/
+
+# Logs
+logs/
+*.log
+
+# Docker
+*.override.yml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Segredos e chaves
+*.pem
+*.key
+*.crt
+infra/freeradius/users

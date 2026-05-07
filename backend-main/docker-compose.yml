@@ -1,0 +1,116 @@
+services:
+  # ─── Banco de Dados Principal ───────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: chamados_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: chamados_db
+      POSTGRES_USER: chamados_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-chamados_pass}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chamados_user -d chamados_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - chamados_net
+
+  # ─── Backend Node.js ────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chamados_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgres
+      EVOLUTION_API_URL: http://chamados_evolution:8080
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./src:/app/src:ro
+    networks:
+      - chamados_net
+      - evolution_net
+
+  # ─── Evolution API ──────────────────────────────────────────────────────────
+  evolution-api:
+    image: evoapicloud/evolution-api:v2.3.7
+    container_name: chamados_evolution
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      # Servidor
+      SERVER_TYPE: http
+      SERVER_PORT: "8080"
+
+      # Autenticação
+      AUTHENTICATION_TYPE: apikey
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:-changeme}
+      AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: "true"
+
+      # Banco — Evolution API v2 sempre roda Prisma migrations (DATABASE_ENABLED=false não funciona em v2)
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: "postgresql://evolution:evolution_pass@postgres:5432/evolution?schema=public"
+
+      # Armazenamento em disco (usado quando DATABASE_ENABLED=false)
+      STORE_MESSAGES: "true"
+      STORE_MESSAGES_UPDATE: "true"
+      STORE_CONTACTS: "true"
+      STORE_CHATS: "true"
+
+      # Webhook global → backend
+      WEBHOOK_GLOBAL_ENABLED: "true"
+      WEBHOOK_GLOBAL_URL: "http://chamados_backend:3001/webhook/evolution"
+      WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS: "false"
+      WEBHOOK_EVENTS_MESSAGES_UPSERT: "true"
+      WEBHOOK_EVENTS_CONNECTION_UPDATE: "true"
+
+      # Cache Redis — desabilitado (sem Redis nesta stack)
+      CACHE_REDIS_ENABLED: "false"
+      CACHE_REDIS_URI: ""
+      CACHE_LOCAL_ENABLED: "true"
+
+      # QR Code e logs
+      QRCODE_LIMIT: "30"
+      LOG_LEVEL: "ERROR"
+      LOG_COLOR: "false"
+    volumes:
+      - evolution_instances:/evolution/instances
+      - evolution_store:/evolution/store
+    networks:
+      - chamados_net
+      - evolution_net
+
+  # ─── WhaTicket (transbordo humano) ─────────────────────────────────────────
+  # NOTA: WhaTicket possui seu próprio docker-compose.
+  # Suba-o separadamente e configure a rede abaixo para integração.
+  # git clone https://github.com/canove/whaticket-community
+  # Configure WEBHOOK_URL no WhaTicket apontando para: http://backend:3001/webhook/whaticket
+
+volumes:
+  pgdata:
+  evolution_instances:
+  evolution_store:
+
+networks:
+  chamados_net:
+    driver: bridge
+  evolution_net:
+    driver: bridge
+    external: false

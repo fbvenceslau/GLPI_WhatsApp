@@ -1,0 +1,43 @@
+@import "bootstrap/scss/bootstrap";
+
+:root {
+  --brand-primary: #0d6efd;
+  --brand-dark: #0a2540;
+  --sidebar-width: 240px;
+}
+
+body {
+  background-color: #f4f6f9;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+.sidebar {
+  width: var(--sidebar-width);
+  min-height: 100vh;
+  background: var(--brand-dark);
+  color: #fff;
+  padding-top: 1rem;
+
+  .nav-link {
+    color: rgba(255, 255, 255, 0.75);
+    &:hover, &.active { color: #fff; background: rgba(255,255,255,0.1); border-radius: 6px; }
+  }
+}
+
+.main-content {
+  margin-left: var(--sidebar-width);
+  padding: 2rem;
+}
+
+.ticket-card {
+  border-left: 4px solid var(--brand-primary);
+  transition: transform 0.15s;
+  &:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+}
+
+.status-badge { font-size: 0.75rem; padding: 4px 10px; border-radius: 20px; }
+
+@media (max-width: 768px) {
+  .sidebar { width: 100%; min-height: auto; position: relative; }
+  .main-content { margin-left: 0; padding: 1rem; }
+}
