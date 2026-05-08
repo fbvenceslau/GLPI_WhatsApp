@@ -25,7 +25,10 @@
       "PowerShell(curl *)",
       "Bash(findstr \"GLPI_APP_TOKEN\")",
       "Bash(Get-ChildItem -Recurse \"D:\\\\Projects\\\\Chamados\\\\backend-main\\\\src\" -Filter \"*.ts\")",
-      "Bash(Select-Object -ExpandProperty FullName)"
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Get-Content D:\\\\Projects\\\\Chamados\\\\backend-main\\\\.env)",
+      "Bash(Select-String \"API_KEY\")",
+      "Bash(docker-compose *)"
     ]
   }
 }

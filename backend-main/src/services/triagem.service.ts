@@ -2,6 +2,7 @@ import { ConversationState, ConversationSession, TriagemResult } from '../types/
 import { GlpiTicketType, GlpiUrgency, GlpiCategory, GlpiEntity, URGENCY_LABELS, TYPE_LABELS } from '../types/glpi.types';
 import { glpiService } from './glpi.service';
 import { registrationService } from './registration.service';
+import { ticketNotificationService } from './ticket-notification.service';
 import { glpiConfig } from '../config/glpi';
 import { buildConfirmationSummary, buildGlpiPayload } from '../utils/payload.builder';
 import logger from '../utils/logger';
@@ -414,6 +415,10 @@ export class TriagemService {
 
       const result = await glpiService.createTicket(payload);
       const ticketUrl = await glpiService.getTicketUrl(result.id);
+
+      ticketNotificationService.track(session.phone, result.id, 1).catch((err) =>
+        logger.error('[Triagem] Erro ao iniciar monitoramento do chamado:', err)
+      );
 
       return {
         responses: [{ to: session.phone, message: MSG.TICKET_CREATED(result.id, ticketUrl) }],

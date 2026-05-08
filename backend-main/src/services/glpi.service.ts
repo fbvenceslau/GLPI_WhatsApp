@@ -354,6 +354,37 @@ class GlpiService {
   async getTicketUrl(ticketId: number): Promise<string> {
     return `${glpiConfig.portalUrl}/front/ticket.form.php?id=${ticketId}`;
   }
+
+  // ─── Acompanhamento de Chamados ──────────────────────────────────────────
+
+  async getTicketStatus(ticketId: number): Promise<{ id: number; status: number } | null> {
+    try {
+      const headers = await this.getAuthHeaders();
+      const response = await this.client.get<{ id: number; status: number }>(
+        `/Ticket/${ticketId}`,
+        { headers }
+      );
+      return { id: response.data.id, status: response.data.status };
+    } catch (error) {
+      logger.error(`[GLPI] Erro ao buscar status do chamado ${ticketId}:`, error);
+      return null;
+    }
+  }
+
+  async getTicketFollowups(ticketId: number): Promise<Array<{ id: number; content: string }>> {
+    try {
+      const headers = await this.getAuthHeaders();
+      const response = await this.client.get<Array<{ id: number; content: string }>>(
+        `/Ticket/${ticketId}/ITILFollowup`,
+        { headers, params: { range: '0-50', sort: 'id', order: 'ASC' } }
+      );
+      if (!Array.isArray(response.data)) return [];
+      return response.data.map(f => ({ id: f.id, content: f.content || '' }));
+    } catch (error) {
+      logger.error(`[GLPI] Erro ao buscar followups do chamado ${ticketId}:`, error);
+      return [];
+    }
+  }
 }
 
 export const glpiService = new GlpiService();
