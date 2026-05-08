@@ -69,6 +69,12 @@ export interface GlpiSessionToken {
   session_token: string;
 }
 
+export interface GlpiEntity {
+  id: number;
+  name: string;
+  completename: string;
+}
+
 export interface GlpiSearchResult<T> {
   totalcount: number;
   count: number;

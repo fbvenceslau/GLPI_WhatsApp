@@ -23,7 +23,9 @@
       "Bash(Select-Object -Last 40)",
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('Status:', d[0]['connectionStatus'], '| Webhook msgs count:', d[0]['_count']\\)\")",
       "PowerShell(curl *)",
-      "Bash(findstr \"GLPI_APP_TOKEN\")"
+      "Bash(findstr \"GLPI_APP_TOKEN\")",
+      "Bash(Get-ChildItem -Recurse \"D:\\\\Projects\\\\Chamados\\\\backend-main\\\\src\" -Filter \"*.ts\")",
+      "Bash(Select-Object -ExpandProperty FullName)"
     ]
   }
 }

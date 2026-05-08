@@ -2,13 +2,22 @@ import { GlpiTicketType, GlpiUrgency } from './glpi.types';
 
 export enum ConversationState {
   INITIAL = 'INITIAL',
-  AWAITING_EMAIL = 'AWAITING_EMAIL',
-  USER_NOT_FOUND = 'USER_NOT_FOUND',
+
+  // ─── Fluxo: usuário cadastrado ────────────────────────────────────────
+  AWAITING_ENTITY = 'AWAITING_ENTITY',
   AWAITING_TYPE = 'AWAITING_TYPE',
   AWAITING_DESCRIPTION = 'AWAITING_DESCRIPTION',
   AWAITING_URGENCY = 'AWAITING_URGENCY',
   AWAITING_CATEGORY = 'AWAITING_CATEGORY',
   AWAITING_CONFIRMATION = 'AWAITING_CONFIRMATION',
+
+  // ─── Fluxo: usuário não cadastrado ───────────────────────────────────
+  AWAITING_REGISTER_DECISION = 'AWAITING_REGISTER_DECISION',
+  AWAITING_REGISTER_NAME = 'AWAITING_REGISTER_NAME',
+  AWAITING_REGISTER_EMAIL = 'AWAITING_REGISTER_EMAIL',
+  AWAITING_REGISTER_CONFIRM = 'AWAITING_REGISTER_CONFIRM',
+
+  // ─── Estados finais ───────────────────────────────────────────────────
   COMPLETED = 'COMPLETED',
   TRANSFERRED = 'TRANSFERRED',
   CANCELLED = 'CANCELLED',
@@ -20,20 +29,27 @@ export interface ConversationSession {
   state: ConversationState;
   attemptCount: number;
 
-  // Dados do usuário GLPI identificado
-  glpiUserId?: number;
-  glpiUserName?: string;
-  glpiUserEmail?: string;
+  // Usuário GLPI identificado
+  glpiUserId?: number | null;
+  glpiUserName?: string | null;
+  glpiUserEmail?: string | null;
 
-  // Dados do chamado sendo coletado
-  ticketType?: GlpiTicketType;
-  description?: string;
-  urgency?: GlpiUrgency;
-  categoryId?: number;
-  categoryName?: string;
-  glpiTicketId?: number;
+  // Entidade selecionada
+  entityId?: number | null;
+  entityName?: string | null;
 
-  // Controle de sessão
+  // Dados do chamado
+  ticketType?: GlpiTicketType | null;
+  description?: string | null;
+  urgency?: GlpiUrgency | null;
+  categoryId?: number | null;
+  categoryName?: string | null;
+  glpiTicketId?: number | null;
+
+  // Dados de cadastro (usuário não encontrado)
+  registerName?: string | null;
+  registerEmail?: string | null;
+
   lastActivityAt: Date;
   createdAt: Date;
   expiresAt: Date;

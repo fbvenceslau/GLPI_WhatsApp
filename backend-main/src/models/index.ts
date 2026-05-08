@@ -1,7 +1,8 @@
 import sequelize from '../config/database';
 import { Session } from './session.model';
+import { PendingRegistration } from './pending-registration.model';
 
-export { Session };
+export { Session, PendingRegistration };
 
 export async function syncDatabase(): Promise<void> {
   await sequelize.authenticate();

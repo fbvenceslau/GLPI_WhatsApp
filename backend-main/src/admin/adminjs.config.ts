@@ -21,7 +21,8 @@ const adminJs = new AdminJS({
         filterProperties: ['state', 'phone', 'glpiUserName'],
         showProperties: [
           'id', 'phone', 'state', 'glpiUserId', 'glpiUserName', 'glpiUserEmail',
-          'ticketType', 'urgency', 'categoryName', 'glpiTicketId',
+          'entityName', 'ticketType', 'urgency', 'categoryName', 'glpiTicketId',
+          'registerName', 'registerEmail',
           'attemptCount', 'lastActivityAt', 'expiresAt', 'createdAt',
         ],
       },

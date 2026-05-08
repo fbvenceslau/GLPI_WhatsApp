@@ -10,6 +10,7 @@ import webhookRoutes from './routes/webhook.routes';
 import adminRoutes from './routes/admin.routes';
 import { buildAdminRouter } from './admin/adminjs.config';
 import { conversationService } from './services/conversation.service';
+import { registrationService } from './services/registration.service';
 import logger from './utils/logger';
 
 const app = express();
@@ -52,6 +53,8 @@ async function bootstrap(): Promise<void> {
     app.use('/api', adminRoutes);
 
     setInterval(() => conversationService.cleanExpiredSessions(), 15 * 60 * 1000);
+    // Verifica aprovações de cadastro a cada 3 minutos
+    setInterval(() => registrationService.checkPendingRegistrations(), 3 * 60 * 1000);
 
     app.listen(PORT, () => {
       logger.info(`[App] Servidor rodando na porta ${PORT} (${process.env.NODE_ENV})`);
