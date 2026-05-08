@@ -52,7 +52,7 @@ const MSG = {
 
   ASK_REGISTER_NAME: `👤 Qual é o seu *nome completo*?`,
 
-  ASK_REGISTER_EMAIL: `📧 Qual é o seu *e-mail corporativo*?`,
+  ASK_REGISTER_EMAIL: `📧 Qual é o seu *e-mail*?`,
 
   INVALID_EMAIL: `Por favor, informe um e-mail válido (ex: nome@empresa.com.br).`,
 
