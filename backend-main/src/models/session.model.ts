@@ -11,6 +11,7 @@ interface SessionAttributes {
   glpiUserId: number | null;
   glpiUserName: string | null;
   glpiUserEmail: string | null;
+  department: string | null;
   entityId: number | null;
   entityName: string | null;
   ticketType: GlpiTicketType | null;
@@ -31,6 +32,7 @@ type SessionCreationAttributes = Optional<
   | 'glpiUserId'
   | 'glpiUserName'
   | 'glpiUserEmail'
+  | 'department'
   | 'entityId'
   | 'entityName'
   | 'ticketType'
@@ -54,6 +56,7 @@ export class Session
   declare glpiUserId: number | null;
   declare glpiUserName: string | null;
   declare glpiUserEmail: string | null;
+  declare department: string | null;
   declare entityId: number | null;
   declare entityName: string | null;
   declare ticketType: GlpiTicketType | null;
@@ -94,6 +97,7 @@ Session.init(
     glpiUserId: { type: DataTypes.INTEGER, allowNull: true },
     glpiUserName: { type: DataTypes.STRING(200), allowNull: true },
     glpiUserEmail: { type: DataTypes.STRING(200), allowNull: true },
+    department: { type: DataTypes.STRING(20), allowNull: true },
     entityId: { type: DataTypes.INTEGER, allowNull: true },
     entityName: { type: DataTypes.STRING(200), allowNull: true },
     ticketType: { type: DataTypes.INTEGER, allowNull: true },

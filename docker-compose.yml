@@ -23,7 +23,7 @@ services:
   # ─── Backend Node.js ────────────────────────────────────────────────────────
   backend:
     build:
-      context: .
+      context: ./backend-main
       dockerfile: Dockerfile
     container_name: chamados_backend
     restart: unless-stopped
@@ -38,14 +38,14 @@ services:
     ports:
       - "3001:3001"
     volumes:
-      - ./src:/app/src:ro
+      - ./backend-main/src:/app/src:ro
     networks:
       - chamados_net
       - evolution_net
 
   # ─── Evolution API ──────────────────────────────────────────────────────────
   evolution-api:
-    image: evoapicloud/evolution-api:v2.3.7
+    image: evoapicloud/evolution-api:latest
     container_name: chamados_evolution
     restart: unless-stopped
     depends_on:
@@ -76,7 +76,7 @@ services:
 
       # Webhook global → backend
       WEBHOOK_GLOBAL_ENABLED: "true"
-      WEBHOOK_GLOBAL_URL: "http://chamados_backend:3001/webhook/evolution"
+      WEBHOOK_GLOBAL_URL: "http://host.docker.internal:3001/webhook/evolution"
       WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS: "false"
       WEBHOOK_EVENTS_MESSAGES_UPSERT: "true"
       WEBHOOK_EVENTS_CONNECTION_UPDATE: "true"
@@ -96,12 +96,6 @@ services:
     networks:
       - chamados_net
       - evolution_net
-
-  # ─── WhaTicket (transbordo humano) ─────────────────────────────────────────
-  # NOTA: WhaTicket possui seu próprio docker-compose.
-  # Suba-o separadamente e configure a rede abaixo para integração.
-  # git clone https://github.com/canove/whaticket-community
-  # Configure WEBHOOK_URL no WhaTicket apontando para: http://backend:3001/webhook/whaticket
 
 volumes:
   pgdata:

@@ -93,3 +93,19 @@ export const TYPE_LABELS: Record<GlpiTicketType, string> = {
   [GlpiTicketType.INCIDENT]: 'Incidente',
   [GlpiTicketType.REQUEST]: 'Requisição',
 };
+
+export type Department = 'TI' | 'COMPRAS' | 'MANUTENCAO' | 'FACILITIES';
+
+export const DEPARTMENT_LABELS: Record<Department, string> = {
+  TI: 'T.I',
+  COMPRAS: 'Compras',
+  MANUTENCAO: 'Manutenção Predial',
+  FACILITIES: 'Facilities',
+};
+
+export const DEPARTMENT_TICKET_TYPE: Record<Department, GlpiTicketType> = {
+  TI: GlpiTicketType.INCIDENT,
+  COMPRAS: GlpiTicketType.REQUEST,
+  MANUTENCAO: GlpiTicketType.REQUEST,
+  FACILITIES: GlpiTicketType.REQUEST,
+};

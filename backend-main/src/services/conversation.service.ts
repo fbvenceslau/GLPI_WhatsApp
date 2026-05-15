@@ -1,3 +1,4 @@
+import { Op } from 'sequelize';
 import { Session } from '../models/session.model';
 import { ConversationState, ConversationSession, IncomingMessage } from '../types/conversation.types';
 import { triagemService } from './triagem.service';
@@ -10,7 +11,6 @@ const SESSION_TIMEOUT_MINUTES = parseInt(process.env.SESSION_TIMEOUT_MINUTES || 
 export class ConversationService {
 
   async handleIncomingMessage(message: IncomingMessage): Promise<void> {
-    // Ignora mensagens enviadas pelo próprio bot
     if (message.phone.endsWith('@g.us')) {
       logger.info('[Conversation] Mensagem de grupo ignorada.');
       return;
@@ -18,7 +18,7 @@ export class ConversationService {
 
     let session = await this.getOrCreateSession(message.phone);
 
-    // Sessão expirada ou finalizada → reseta para INITIAL via UPDATE (evita race condition de destroy+create)
+    // Reseta via UPDATE (evita race condition de destroy+create)
     if (this.isExpiredOrDone(session)) {
       await Session.update(
         {
@@ -27,6 +27,7 @@ export class ConversationService {
           glpiUserId: null,
           glpiUserName: null,
           glpiUserEmail: null,
+          department: null,
           entityId: null,
           entityName: null,
           ticketType: null,
@@ -51,7 +52,6 @@ export class ConversationService {
 
       const result = await triagemService.process(session, message.messageText);
 
-      // Persiste atualizações na sessão
       await Session.update(
         {
           state: result.newState,
@@ -62,18 +62,14 @@ export class ConversationService {
         { where: { phone: message.phone } }
       );
 
-      // Envia todas as respostas sequencialmente
       for (const response of result.responses) {
         await evolutionService.sendText(response.to, response.message);
-        // Pequena pausa entre mensagens para melhor UX
         if (result.responses.length > 1) {
           await new Promise((r) => setTimeout(r, 800));
         }
       }
 
-      logger.info(
-        `[Conversation] ${message.phone} | ${session.state} → ${result.newState}`
-      );
+      logger.info(`[Conversation] ${message.phone} | ${session.state} → ${result.newState}`);
     } catch (error) {
       logger.error('[Conversation] Erro no processamento:', error);
       await evolutionService.sendText(
@@ -95,6 +91,7 @@ export class ConversationService {
         glpiUserId: null,
         glpiUserName: null,
         glpiUserEmail: null,
+        department: null,
         entityId: null,
         entityName: null,
         ticketType: null,
@@ -133,13 +130,9 @@ export class ConversationService {
     return new Date(Date.now() + SESSION_TIMEOUT_MINUTES * 60 * 1000);
   }
 
-  // ─── Limpeza Periódica de Sessões Expiradas ──────────────────────────
-
   async cleanExpiredSessions(): Promise<void> {
     const deleted = await Session.destroy({
-      where: {
-        expiresAt: { $lt: new Date() } as never,
-      },
+      where: { expiresAt: { [Op.lt]: new Date() } },
     });
     if (deleted > 0) {
       logger.info(`[Conversation] ${deleted} sessões expiradas removidas.`);

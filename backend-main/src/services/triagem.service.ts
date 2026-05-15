@@ -1,5 +1,5 @@
-import { ConversationState, ConversationSession, TriagemResult } from '../types/conversation.types';
-import { GlpiTicketType, GlpiUrgency, GlpiCategory, GlpiEntity, URGENCY_LABELS, TYPE_LABELS } from '../types/glpi.types';
+import { ConversationState, ConversationSession, TriagemResult, Department } from '../types/conversation.types';
+import { GlpiUrgency, GlpiCategory, GlpiEntity, URGENCY_LABELS, DEPARTMENT_LABELS, DEPARTMENT_TICKET_TYPE } from '../types/glpi.types';
 import { glpiService } from './glpi.service';
 import { registrationService } from './registration.service';
 import { ticketNotificationService } from './ticket-notification.service';
@@ -13,7 +13,9 @@ const MAX_ATTEMPTS = 3;
 
 const MSG = {
   USER_FOUND: (name: string) =>
-    `✅ Encontrei seu cadastro, *${name}*! Bem-vindo(a) ao Suporte Técnico.`,
+    `✅ Encontrei seu cadastro, *${name}*! Bem-vindo(a).`,
+
+  ASK_DEPARTMENT: `🏢 Para qual setor você deseja abrir o chamado?\n\n*1* - 💻 T.I\n*2* - 🛒 Compras\n*3* - 🔧 Manutenção Predial\n*4* - 🏗️ Facilities\n\n_Digite o número correspondente._`,
 
   ASK_ENTITY: (entities: GlpiEntity[]) => {
     const lines = ['🏢 Para qual entidade você deseja abrir o chamado?\n'];
@@ -22,11 +24,15 @@ const MSG = {
     return lines.join('\n');
   },
 
-  ASK_TYPE: `🎯 Como posso ajudar?\n\n*1* - 🔴 Incidente _(algo parou de funcionar)_\n*2* - 🔵 Requisição _(pedido de serviço ou recurso)_`,
-
-  ASK_DESCRIPTION_INCIDENT: `🔴 *Incidente selecionado.*\n\nDescreva o problema:\n• O que parou de funcionar?\n• Desde quando?\n• Quantos usuários/sistemas afetados?\n• Há mensagem de erro?`,
-
-  ASK_DESCRIPTION_REQUEST: `🔵 *Requisição selecionada.*\n\nDescreva o que você precisa:\n• O que está solicitando?\n• Qual a finalidade?\n• Há data limite?`,
+  ASK_DESCRIPTION: (department: Department) => {
+    const prompts: Record<Department, string> = {
+      TI: `💻 *T.I selecionado.*\n\nDescreva o problema ou solicitação:\n• O que ocorreu ou o que você precisa?\n• Desde quando? Há mensagem de erro?\n• Quantos usuários foram afetados?`,
+      COMPRAS: `🛒 *Compras selecionado.*\n\nDescreva o que precisa adquirir:\n• Qual produto/serviço?\n• Quantidade necessária?\n• Há data limite para entrega?`,
+      MANUTENCAO: `🔧 *Manutenção Predial selecionado.*\n\nDescreva o problema:\n• O que precisa ser reparado/ajustado?\n• Onde está localizado?\n• Há risco imediato de segurança?`,
+      FACILITIES: `🏗️ *Facilities selecionado.*\n\nDescreva o que precisa:\n• Qual serviço ou recurso você necessita?\n• Onde e quando será utilizado?`,
+    };
+    return prompts[department];
+  },
 
   ASK_URGENCY: `⚡ Qual é a urgência?\n\n*1* - Muito Baixa _(pode aguardar)_\n*2* - Baixa\n*3* - Média _(padrão)_\n*4* - Alta _(impacto significativo)_\n*5* - Muito Alta _(ambiente parado)_`,
 
@@ -34,7 +40,7 @@ const MSG = {
     `⚠️ Opção inválida. Por favor, escolha entre *1* e *${max}*.`,
 
   TICKET_CREATED: (id: number, url: string) =>
-    `🎉 *Chamado #${id} aberto com sucesso!*\n\nNossa equipe foi notificada e entrará em contato conforme o SLA.\n\n🔗 Acompanhe pelo portal:\n${url}\n\n_Obrigado por contatar o Suporte Técnico!_`,
+    `🎉 *Chamado #${id} aberto com sucesso!*\n\nNossa equipe foi notificada e entrará em contato conforme o SLA.\n\n🔗 Acompanhe pelo portal:\n${url}\n\n_Obrigado por entrar em contato!_`,
 
   CANCELLED: `❌ Chamado cancelado. Caso precise de ajuda, é só enviar uma nova mensagem!`,
 
@@ -96,6 +102,16 @@ function buildDisplayName(user: { name: string; firstname: unknown; realname: un
   return user.name;
 }
 
+function getCategoryParentId(department: Department): number | undefined {
+  const map: Record<Department, number | undefined> = {
+    TI: glpiConfig.categoryParentTI,
+    COMPRAS: glpiConfig.categoryParentCompras,
+    MANUTENCAO: glpiConfig.categoryParentManutencao,
+    FACILITIES: glpiConfig.categoryParentFacilities,
+  };
+  return map[department];
+}
+
 // ─── Serviço de Triagem ────────────────────────────────────────────────────
 
 export class TriagemService {
@@ -111,11 +127,11 @@ export class TriagemService {
       case ConversationState.INITIAL:
         return this.handleInitial(session);
 
+      case ConversationState.AWAITING_DEPARTMENT:
+        return this.handleDepartment(session, text);
+
       case ConversationState.AWAITING_ENTITY:
         return this.handleEntity(session, text);
-
-      case ConversationState.AWAITING_TYPE:
-        return this.handleType(session, text);
 
       case ConversationState.AWAITING_DESCRIPTION:
         return this.handleDescription(session, text);
@@ -164,40 +180,16 @@ export class TriagemService {
 
       const displayName = buildDisplayName(user);
 
-      const entities = await glpiService.getUserEntities(user.id);
-
-      if (entities.length <= 1) {
-        const entityId = entities[0]?.id ?? glpiConfig.defaultEntityId;
-        const entityName = entities[0]?.completename || entities[0]?.name || '';
-
-        return {
-          responses: [
-            { to: session.phone, message: MSG.USER_FOUND(displayName) },
-            { to: session.phone, message: MSG.ASK_TYPE },
-          ],
-          newState: ConversationState.AWAITING_TYPE,
-          sessionUpdates: {
-            glpiUserId: user.id,
-            glpiUserName: displayName,
-            glpiUserEmail: user.email,
-            entityId,
-            entityName,
-            attemptCount: 0,
-          },
-        };
-      }
-
       return {
         responses: [
           { to: session.phone, message: MSG.USER_FOUND(displayName) },
-          { to: session.phone, message: MSG.ASK_ENTITY(entities) },
+          { to: session.phone, message: MSG.ASK_DEPARTMENT },
         ],
-        newState: ConversationState.AWAITING_ENTITY,
+        newState: ConversationState.AWAITING_DEPARTMENT,
         sessionUpdates: {
           glpiUserId: user.id,
           glpiUserName: displayName,
           glpiUserEmail: user.email,
-          description: JSON.stringify({ _entities: entities }),
           attemptCount: 0,
         },
       };
@@ -209,6 +201,69 @@ export class TriagemService {
         sessionUpdates: {},
       };
     }
+  }
+
+  private async handleDepartment(session: ConversationSession, text: string): Promise<TriagemResult> {
+    const DEPARTMENTS: Department[] = ['TI', 'COMPRAS', 'MANUTENCAO', 'FACILITIES'];
+    const option = parseMenuOption(text, DEPARTMENTS.length);
+
+    if (!option) {
+      return this.invalidInput(session, `${MSG.INVALID_OPTION(DEPARTMENTS.length)}\n\n${MSG.ASK_DEPARTMENT}`, ConversationState.AWAITING_DEPARTMENT);
+    }
+
+    const department = DEPARTMENTS[option - 1];
+    const ticketType = DEPARTMENT_TICKET_TYPE[department];
+
+    const needsEntity = department === 'TI' || department === 'COMPRAS';
+
+    if (needsEntity) {
+      const entities = await glpiService.getUserEntities(session.glpiUserId!);
+
+      if (entities.length > 1) {
+        return {
+          responses: [{ to: session.phone, message: MSG.ASK_ENTITY(entities) }],
+          newState: ConversationState.AWAITING_ENTITY,
+          sessionUpdates: {
+            department,
+            ticketType,
+            description: JSON.stringify({ _entities: entities }),
+            attemptCount: 0,
+          },
+        };
+      }
+
+      const entityId = entities[0]?.id ?? glpiConfig.defaultEntityId;
+      const entityName = entities[0]?.completename || entities[0]?.name || '';
+
+      return {
+        responses: [{ to: session.phone, message: MSG.ASK_DESCRIPTION(department) }],
+        newState: ConversationState.AWAITING_DESCRIPTION,
+        sessionUpdates: {
+          department,
+          ticketType,
+          entityId,
+          entityName,
+          attemptCount: 0,
+        },
+      };
+    }
+
+    // MANUTENCAO / FACILITIES: define entidade padrão silenciosamente
+    const entities = await glpiService.getUserEntities(session.glpiUserId!);
+    const entityId = entities[0]?.id ?? glpiConfig.defaultEntityId;
+    const entityName = entities[0]?.completename || entities[0]?.name || '';
+
+    return {
+      responses: [{ to: session.phone, message: MSG.ASK_DESCRIPTION(department) }],
+      newState: ConversationState.AWAITING_DESCRIPTION,
+      sessionUpdates: {
+        department,
+        ticketType,
+        entityId,
+        entityName,
+        attemptCount: 0,
+      },
+    };
   }
 
   private handleEntity(session: ConversationSession, text: string): TriagemResult {
@@ -238,35 +293,17 @@ export class TriagemService {
     }
 
     const selected = entities[option - 1];
+    const department = (session.department ?? 'TI') as Department;
 
     return {
-      responses: [{ to: session.phone, message: MSG.ASK_TYPE }],
-      newState: ConversationState.AWAITING_TYPE,
+      responses: [{ to: session.phone, message: MSG.ASK_DESCRIPTION(department) }],
+      newState: ConversationState.AWAITING_DESCRIPTION,
       sessionUpdates: {
         entityId: selected.id,
         entityName: selected.completename || selected.name,
         description: null,
         attemptCount: 0,
       },
-    };
-  }
-
-  private handleType(session: ConversationSession, text: string): TriagemResult {
-    const option = parseMenuOption(text, 2);
-
-    if (!option) {
-      return this.invalidInput(session, MSG.INVALID_OPTION(2), ConversationState.AWAITING_TYPE);
-    }
-
-    const ticketType = option === 1 ? GlpiTicketType.INCIDENT : GlpiTicketType.REQUEST;
-    const askDesc = ticketType === GlpiTicketType.INCIDENT
-      ? MSG.ASK_DESCRIPTION_INCIDENT
-      : MSG.ASK_DESCRIPTION_REQUEST;
-
-    return {
-      responses: [{ to: session.phone, message: askDesc }],
-      newState: ConversationState.AWAITING_DESCRIPTION,
-      sessionUpdates: { ticketType, attemptCount: 0 },
     };
   }
 
@@ -300,7 +337,9 @@ export class TriagemService {
     }
 
     const urgency = option as GlpiUrgency;
-    const categories = await glpiService.getCategories(session.ticketType ?? undefined);
+    const department = (session.department ?? undefined) as Department | undefined;
+    const parentCategoryId = department ? getCategoryParentId(department) : undefined;
+    const categories = await glpiService.getCategories(parentCategoryId);
 
     if (categories.length === 0) {
       logger.warn('[Triagem] Nenhuma categoria encontrada no GLPI, usando padrão.');
@@ -383,15 +422,17 @@ export class TriagemService {
     }
 
     if (text === '2') {
-      // Volta para seleção de tipo — reinicia dados do chamado
       return {
         responses: [{
           to: session.phone,
-          message: `🔄 Tudo bem! Vamos recomeçar.\n\n${MSG.ASK_TYPE}`,
+          message: `🔄 Tudo bem! Vamos recomeçar.\n\n${MSG.ASK_DEPARTMENT}`,
         }],
-        newState: ConversationState.AWAITING_TYPE,
+        newState: ConversationState.AWAITING_DEPARTMENT,
         sessionUpdates: {
+          department: null,
           ticketType: null,
+          entityId: null,
+          entityName: null,
           description: null,
           urgency: null,
           categoryId: null,
@@ -493,7 +534,6 @@ export class TriagemService {
 
     const email = text.toLowerCase().trim();
 
-    // Verifica se o e-mail já existe no GLPI (ativo ou inativo)
     try {
       const existing = await glpiService.findUserByEmail(email);
       if (existing) {
@@ -514,7 +554,6 @@ export class TriagemService {
       }
     } catch (error) {
       logger.error('[Triagem] Erro ao verificar e-mail no GLPI:', error);
-      // Continua o fluxo normalmente em caso de falha na verificação
     }
 
     const phoneDisplay = session.phone.split('@')[0];
@@ -562,7 +601,6 @@ export class TriagemService {
       };
     }
 
-    // Opção 1: confirmado — cria usuário no GLPI como inativo (pendente de aprovação)
     let glpiResult: { id: number; username: string; tempPassword: string };
 
     try {
@@ -580,7 +618,6 @@ export class TriagemService {
       };
     }
 
-    // Salva registro para notificação quando a T.I aprovar
     try {
       await registrationService.savePending({
         phone: session.phone,
@@ -590,7 +627,6 @@ export class TriagemService {
       });
     } catch (error) {
       logger.error('[Triagem] Falha ao salvar registro pendente:', error);
-      // Não interrompe — usuário já foi criado no GLPI
     }
 
     return {

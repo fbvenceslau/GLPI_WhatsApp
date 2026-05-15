@@ -1,11 +1,12 @@
-import { ConversationSession } from '../types/conversation.types';
+import { ConversationSession, Department } from '../types/conversation.types';
 import {
   GlpiTicketPayload,
   GlpiTicketType,
   GlpiUrgency,
   GlpiImpact,
   URGENCY_LABELS,
-  TYPE_LABELS,
+  DEPARTMENT_LABELS,
+  DEPARTMENT_TICKET_TYPE,
 } from '../types/glpi.types';
 import { glpiConfig } from '../config/glpi';
 
@@ -20,12 +21,23 @@ function deriveImpact(urgency: GlpiUrgency): GlpiImpact {
   return impactMap[urgency];
 }
 
+function resolveTicketType(session: ConversationSession): GlpiTicketType {
+  if (session.ticketType) return session.ticketType;
+  if (session.department) return DEPARTMENT_TICKET_TYPE[session.department as Department];
+  return GlpiTicketType.REQUEST;
+}
+
+function getDepartmentLabel(session: ConversationSession): string {
+  if (session.department) return DEPARTMENT_LABELS[session.department as Department];
+  return 'Geral';
+}
+
 function buildTicketTitle(session: ConversationSession): string {
-  const typeLabel = TYPE_LABELS[session.ticketType!];
+  const deptLabel = getDepartmentLabel(session);
   const category = session.categoryName || 'Geral';
   const maxLen = 60;
   const descSnippet = session.description!.slice(0, maxLen).replace(/\n/g, ' ');
-  return `[${typeLabel}] ${category} - ${descSnippet}${session.description!.length > maxLen ? '...' : ''}`;
+  return `[${deptLabel}] ${category} - ${descSnippet}${session.description!.length > maxLen ? '...' : ''}`;
 }
 
 function buildTicketContent(session: ConversationSession): string {
@@ -34,7 +46,7 @@ function buildTicketContent(session: ConversationSession): string {
     ``,
     `**Solicitante:** ${session.glpiUserName} (${session.glpiUserEmail || 'sem e-mail'})`,
     session.entityName ? `**Entidade:** ${session.entityName}` : null,
-    `**Tipo:** ${TYPE_LABELS[session.ticketType!]}`,
+    `**Setor:** ${getDepartmentLabel(session)}`,
     `**Categoria:** ${session.categoryName}`,
     `**Urgência:** ${URGENCY_LABELS[session.urgency!]}`,
     ``,
@@ -49,15 +61,17 @@ function buildTicketContent(session: ConversationSession): string {
 }
 
 export function buildGlpiPayload(session: ConversationSession): GlpiTicketPayload {
-  if (!session.glpiUserId || !session.ticketType || !session.description || !session.urgency) {
+  if (!session.glpiUserId || !session.description || !session.urgency) {
     throw new Error('Sessão incompleta: campos obrigatórios ausentes para criar o chamado.');
   }
+
+  const ticketType = resolveTicketType(session);
 
   return {
     input: {
       name: buildTicketTitle(session),
       content: buildTicketContent(session),
-      type: session.ticketType,
+      type: ticketType,
       urgency: session.urgency,
       impact: deriveImpact(session.urgency),
       itilcategories_id: session.categoryId || 0,
@@ -71,7 +85,7 @@ export function buildGlpiPayload(session: ConversationSession): GlpiTicketPayloa
 
 export function buildConfirmationSummary(session: ConversationSession): string {
   const urgLabel = URGENCY_LABELS[session.urgency!];
-  const typeLabel = TYPE_LABELS[session.ticketType!];
+  const deptLabel = getDepartmentLabel(session);
   const descPreview = session.description!.slice(0, 200);
   const truncated = session.description!.length > 200 ? '...' : '';
 
@@ -79,12 +93,12 @@ export function buildConfirmationSummary(session: ConversationSession): string {
     `📋 *Resumo do seu chamado:*`,
     ``,
     `👤 *Solicitante:* ${session.glpiUserName}`,
+    `🏢 *Setor:* ${deptLabel}`,
   ];
 
-  if (session.entityName) lines.push(`🏢 *Entidade:* ${session.entityName}`);
+  if (session.entityName) lines.push(`🏛️ *Entidade:* ${session.entityName}`);
 
   lines.push(
-    `🔧 *Tipo:* ${typeLabel}`,
     `📁 *Categoria:* ${session.categoryName}`,
     `⚡ *Urgência:* ${urgLabel}`,
     ``,

@@ -1,7 +1,3 @@
-import dotenv from 'dotenv';
-
-dotenv.config();
-
 export const evolutionConfig = {
   apiUrl: process.env.EVOLUTION_API_URL || 'http://localhost:8080',
   apiKey: process.env.EVOLUTION_API_KEY || '',

@@ -29,7 +29,6 @@ const ptBR = {
       selectedRecords: 'Selecionados ({{count}})',
       filters: 'Filtros',
       loginWelcome: 'Bem-vindo',
-      // Chaves baseadas no tableName do Sequelize (como o @adminjs/sequelize deriva o resource ID)
       conversation_sessions: 'Sessões WhatsApp',
       ticket_notifications: 'Notificações de Chamados',
     },
@@ -57,6 +56,7 @@ const ptBR = {
       glpiUserId: 'ID Usuário GLPI',
       glpiUserName: 'Nome',
       glpiUserEmail: 'E-mail',
+      department: 'Setor',
       entityName: 'Entidade',
       ticketType: 'Tipo',
       urgency: 'Urgência',

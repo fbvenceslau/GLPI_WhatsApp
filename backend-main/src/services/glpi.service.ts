@@ -288,7 +288,7 @@ class GlpiService {
 
   // ─── Categorias ──────────────────────────────────────────────────────────
 
-  async getCategories(ticketType?: number): Promise<GlpiCategory[]> {
+  async getCategories(parentCategoryId?: number): Promise<GlpiCategory[]> {
     try {
       const headers = await this.getAuthHeaders();
 
@@ -303,14 +303,11 @@ class GlpiService {
         order: 'ASC',
       };
 
-      if (ticketType === 1) {
-        params['criteria[0][field]'] = 74;  // visível para incidente
+      if (parentCategoryId !== undefined) {
+        // Campo 3 = itilcategories_id (categoria pai) na API de busca do GLPI
+        params['criteria[0][field]'] = 3;
         params['criteria[0][searchtype]'] = 'equals';
-        params['criteria[0][value]'] = 1;
-      } else if (ticketType === 2) {
-        params['criteria[0][field]'] = 75;  // visível para requisição
-        params['criteria[0][searchtype]'] = 'equals';
-        params['criteria[0][value]'] = 1;
+        params['criteria[0][value]'] = parentCategoryId;
       }
 
       const response = await this.client.get<GlpiSearchResult<Record<string, string>>>(

@@ -1,7 +1,4 @@
 import { Sequelize } from 'sequelize';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 const sequelize = new Sequelize({
   dialect: (process.env.DB_DIALECT as 'postgres' | 'mysql') || 'postgres',

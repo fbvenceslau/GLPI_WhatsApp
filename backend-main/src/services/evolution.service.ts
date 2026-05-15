@@ -8,7 +8,7 @@ class EvolutionService {
 
   constructor() {
     this.client = axios.create({
-      baseURL: `${evolutionConfig.apiUrl}`,
+      baseURL: evolutionConfig.apiUrl,
       timeout: 8000,
       headers: {
         'Content-Type': 'application/json',
@@ -26,10 +26,7 @@ class EvolutionService {
     };
 
     try {
-      await this.client.post(
-        `/message/sendText/${evolutionConfig.instance}`,
-        payload
-      );
+      await this.client.post(`/message/sendText/${evolutionConfig.instance}`, payload);
       logger.info(`[Evolution] Mensagem enviada para ${phone}`);
     } catch (error) {
       logger.error(`[Evolution] Erro ao enviar mensagem para ${phone}:`, error);
@@ -40,17 +37,16 @@ class EvolutionService {
   async sendTyping(to: string): Promise<void> {
     const phone = this.normalizePhone(to);
     try {
-      await this.client.post(
-        `/chat/sendPresence/${evolutionConfig.instance}`,
-        { number: phone, options: { presence: 'composing', delay: 1000 } }
-      );
+      await this.client.post(`/chat/sendPresence/${evolutionConfig.instance}`, {
+        number: phone,
+        options: { presence: 'composing', delay: 1000 },
+      });
     } catch {
       // não-crítico
     }
   }
 
   private normalizePhone(phone: string): string {
-    // Remove @s.whatsapp.net e caracteres não numéricos além do +
     return phone.replace('@s.whatsapp.net', '').replace(/[^\d+]/g, '');
   }
 }

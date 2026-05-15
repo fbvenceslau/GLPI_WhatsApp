@@ -4,8 +4,8 @@ import logger from '../utils/logger';
 
 export async function listCategories(req: Request, res: Response): Promise<void> {
   try {
-    const ticketType = req.query.type ? parseInt(req.query.type as string) : undefined;
-    const categories = await glpiService.getCategories(ticketType);
+    const parentCategoryId = req.query.parentId ? parseInt(req.query.parentId as string) : undefined;
+    const categories = await glpiService.getCategories(parentCategoryId);
     res.json({ data: categories, count: categories.length });
   } catch (error) {
     logger.error('[GlpiController] Erro ao listar categorias:', error);

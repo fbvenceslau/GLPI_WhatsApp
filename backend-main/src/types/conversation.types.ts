@@ -1,11 +1,14 @@
-import { GlpiTicketType, GlpiUrgency } from './glpi.types';
+import { GlpiTicketType, GlpiUrgency, Department } from './glpi.types';
+
+export type { Department };
 
 export enum ConversationState {
   INITIAL = 'INITIAL',
 
   // ─── Fluxo: usuário cadastrado ────────────────────────────────────────
+  AWAITING_DEPARTMENT = 'AWAITING_DEPARTMENT',
   AWAITING_ENTITY = 'AWAITING_ENTITY',
-  AWAITING_TYPE = 'AWAITING_TYPE',
+  AWAITING_TYPE = 'AWAITING_TYPE', // mantido no enum para compatibilidade com DB existente
   AWAITING_DESCRIPTION = 'AWAITING_DESCRIPTION',
   AWAITING_URGENCY = 'AWAITING_URGENCY',
   AWAITING_CATEGORY = 'AWAITING_CATEGORY',
@@ -33,6 +36,9 @@ export interface ConversationSession {
   glpiUserId?: number | null;
   glpiUserName?: string | null;
   glpiUserEmail?: string | null;
+
+  // Departamento selecionado
+  department?: Department | null;
 
   // Entidade selecionada
   entityId?: number | null;

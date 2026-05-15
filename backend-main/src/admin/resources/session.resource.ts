@@ -29,6 +29,7 @@ export const sessionResource = {
       'glpiUserId',
       'glpiUserName',
       'glpiUserEmail',
+      'department',
       'entityName',
       'ticketType',
       'urgency',
