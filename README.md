@@ -1,394 +1,161 @@
-# Chamados WhatsApp + GLPI
+# Chamados GLPI pelo WhatsApp
 
-Sistema de abertura de chamados de suporte técnico via WhatsApp, com triagem ITIL automatizada e integração nativa com a API REST do GLPI. Inclui transbordo para atendimento humano via WhaTicket.
+Bot de autoatendimento que abre chamados no **GLPI** direto pelo **WhatsApp**, com triagem no padrão **ITIL**, notificação de andamento ao usuário e transbordo para atendimento humano.
 
----
+> Projeto de laboratório. Nenhum dado real de empresa, usuário ou credencial está neste repositório.
 
-## Sumário
+![Node.js](https://img.shields.io/badge/Node.js-20-339933?logo=node.js&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-14-000000?logo=next.js&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+![GLPI](https://img.shields.io/badge/GLPI-REST%20API-F05A28)
 
-- [Visão Geral](#visão-geral)
-- [Stack Tecnológica](#stack-tecnológica)
-- [Pré-requisitos](#pré-requisitos)
-- [Instalação e Configuração](#instalação-e-configuração)
-- [Fluxo Conversacional](#fluxo-conversacional)
-- [Arquitetura](#arquitetura)
-- [Endpoints](#endpoints)
-- [Variáveis de Ambiente](#variáveis-de-ambiente)
-- [Integração GLPI](#integração-glpi)
-- [Integração Evolution API](#integração-evolution-api)
-- [Integração WhaTicket](#integração-whaticket)
-- [Painel Administrativo](#painel-administrativo)
-- [Estrutura de Diretórios](#estrutura-de-diretórios)
+## Por que existe
 
----
+Em muitas empresas o usuário não abre chamado pelo portal: ele manda mensagem no WhatsApp de alguém da T.I. O pedido se perde, não tem SLA e não entra na fila. Este bot leva o atendimento para onde o usuário já está e garante que **todo pedido vira um chamado no GLPI**, com tipo, urgência e categoria corretos.
 
-## Visão Geral
+## Funcionalidades
 
-O bot conduz o usuário por 6 etapas ITIL via WhatsApp:
+- **Identificação pelo número do WhatsApp:** o usuário é localizado no GLPI pelo telefone cadastrado.
+- **Autocadastro:** número desconhecido pode se cadastrar pelo próprio WhatsApp. O usuário é criado **inativo** no GLPI e só recebe o acesso depois que a T.I aprova.
+- **Vários setores:** T.I, Compras, Manutenção Predial e Facilities, cada um com perguntas próprias e categorias do GLPI.
+- **Triagem ITIL:** entidade, descrição, urgência (1 a 5) e categoria, com resumo e confirmação antes de criar o chamado.
+- **Notificações:** o usuário recebe no WhatsApp as mudanças de status e os acompanhamentos do chamado, em horário comercial.
+- **Transbordo humano:** "humano", "atendente" ou "ajuda", ou 3 respostas inválidas seguidas, transferem para o WhaTicket. Quando o atendente fecha o ticket, o chamado é solucionado no GLPI.
+- **Painel administrativo (AdminJS)** para ver e encerrar sessões, e **painel web (Next.js)** para acompanhar os chamados.
 
-1. **Identificação** — localiza o usuário no GLPI pelo e-mail corporativo
-2. **Triagem** — diferencia Incidente (falha) de Requisição (pedido)
-3. **Descrição** — coleta relato detalhado
-4. **Urgência** — escala de 1 (Muito Baixa) a 5 (Muito Alta) para cálculo de SLA
-5. **Categoria** — lista as categorias do GLPI filtradas pelo tipo do chamado
-6. **Confirmação** — exibe resumo e cria o chamado via API
+## Como funciona
 
-Após a criação, o usuário recebe o número do chamado e o link direto para acompanhamento no portal GLPI.
+```mermaid
+flowchart LR
+    U([Usuário no WhatsApp]) --> EVO[Evolution API]
+    EVO -- webhook --> API[Backend Node.js]
+    API <--> DB[(PostgreSQL<br/>sessões)]
+    API -- REST --> GLPI[GLPI]
+    API -- respostas --> EVO
+    API -- transbordo --> WT[WhaTicket]
+    WT -- ticket fechado --> API
+    WEB[Painel Next.js] --> API
+```
 
----
+### Fluxo da conversa
 
-## Stack Tecnológica
+```mermaid
+flowchart TD
+    A[Mensagem recebida] --> B{Número cadastrado<br/>no GLPI?}
+    B -- não --> R[Autocadastro<br/>nome e e-mail] --> P[Usuário inativo<br/>aguarda aprovação da T.I]
+    B -- sim --> C[Setor<br/>T.I / Compras / Manutenção / Facilities]
+    C --> D[Entidade] --> E[Descrição] --> F[Urgência 1-5] --> G[Categoria]
+    G --> H{Confirma?}
+    H -- sim --> I[Chamado criado no GLPI<br/>número e link enviados]
+    H -- corrigir --> C
+    I --> N[Notificações de status<br/>e acompanhamentos]
+```
+
+A qualquer momento, "humano", "atendente" ou "ajuda" transferem para o atendimento humano. Uma sessão parada por 30 minutos recomeça na próxima mensagem.
+
+## Stack
 
 | Camada | Tecnologia |
-|---|---|
-| Backend | Node.js 20 + Express + TypeScript |
-| ORM | Sequelize 6 (PostgreSQL ou MySQL) |
-| Painel Admin | AdminJS 7 |
-| Frontend | Next.js 14 + React 18 + Bootstrap 5 |
-| WhatsApp | Evolution API (container Docker) |
-| Transbordo | WhaTicket Community (container Docker separado) |
-| Infraestrutura | Docker + Docker Compose |
+| --- | --- |
+| Backend | Node.js 20, Express, TypeScript |
+| Banco | PostgreSQL 16 com Sequelize |
+| WhatsApp | Evolution API v2 (Docker) |
 | ITSM | GLPI (REST API) |
+| Transbordo | WhaTicket Community |
+| Painéis | AdminJS e Next.js 14 com Bootstrap |
+| Infraestrutura | Docker Compose |
 
----
+## Como rodar
 
-## Pré-requisitos
-
-- Docker Desktop (Windows) ou Docker Engine + Compose (Linux)
-- Node.js 20+ e npm (para desenvolvimento local)
-- Instância GLPI acessível via HTTP com REST API habilitada
-- Número de WhatsApp dedicado ao suporte
-
----
-
-## Instalação e Configuração
-
-### 1. Clonar e configurar variáveis
+**Pré-requisitos:** Docker e Docker Compose, Node.js 20+, uma instância GLPI com a REST API habilitada e um número de WhatsApp dedicado.
 
 ```bash
-cd D:\Projects\Chamados\backend-main
-copy .env.example .env
-# Edite o .env com suas credenciais (ver seção Variáveis de Ambiente)
+git clone https://github.com/fbvenceslau/glpi-whatsapp-chamados.git
+cd glpi-whatsapp-chamados
+
+# 1. Variáveis de ambiente (o .env fica na raiz do projeto)
+cp backend-main/.env.example .env
+# edite o .env com os dados do seu GLPI e da Evolution API
+
+# 2. Lockfile do backend (necessário para o build Docker)
+cd backend-main && npm install && cd ..
+
+# 3. Sobe PostgreSQL, backend e Evolution API
+docker compose up -d
 ```
 
-### 2. Subir a infraestrutura
+4. Abra o painel da Evolution API em `http://localhost:8080` e leia o QR Code com o WhatsApp do suporte.
+5. Painel administrativo: `http://localhost:3001/admin`.
+6. Painel web (opcional): `cd frontend-main && npm install && npm run dev`, depois abra `http://localhost:3000`.
 
-```bash
-docker-compose up -d
-# Inicia: PostgreSQL + Backend Node.js + Evolution API
-```
+### Preparação no GLPI
 
-### 3. Conectar o WhatsApp
+1. **Configurar > Geral > API:** habilite a REST API e crie um *Application Token*.
+2. Crie um usuário técnico só para a integração e gere o *User Token* dele em **Preferências > Chaves de acesso remoto**.
+3. Opcional: em **Configurar > Listas suspensas > Origens das requisições**, crie "WhatsApp" e informe o ID em `GLPI_REQUEST_TYPE_ID`.
 
-Acesse o painel da Evolution API em `http://localhost:8080` e escaneie o QR Code com o WhatsApp do número de suporte.
+## Variáveis de ambiente
 
-### 4. Configurar o Webhook na Evolution API
+O modelo completo está em [`backend-main/.env.example`](backend-main/.env.example). As principais:
 
-No painel da Evolution API, configure:
-- **Webhook URL**: `http://seu-servidor:3001/webhook/evolution`
-- **Eventos**: `MESSAGES_UPSERT`, `CONNECTION_UPDATE`
+| Variável | Para que serve |
+| --- | --- |
+| `GLPI_BASE_URL` | Endereço da API, ex.: `http://glpi.local/apirest.php` |
+| `GLPI_APP_TOKEN` / `GLPI_USER_TOKEN` | Autenticação na API do GLPI |
+| `GLPI_PORTAL_URL` | Link do portal enviado ao usuário |
+| `EVOLUTION_API_KEY` / `EVOLUTION_INSTANCE` | Acesso à instância do WhatsApp |
+| `DB_*` | Conexão com o PostgreSQL |
+| `WEBHOOK_SECRET` | Protege o webhook da Evolution |
+| `WHATICKET_WEBHOOK_SECRET` | Protege o webhook do WhaTicket |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Login do painel `/admin` |
+| `SESSION_TIMEOUT_MINUTES` | Tempo para reiniciar a conversa (padrão 30) |
 
-### 5. Frontend (opcional)
-
-```bash
-cd D:\Projects\Chamados\frontend-main
-copy .env.example .env.local
-# Configure NEXT_PUBLIC_API_URL=http://localhost:3001
-npm install && npm run dev
-# Acesse: http://localhost:3000
-```
-
----
-
-## Fluxo Conversacional
-
-```
-Usuário envia mensagem
-    │
-    ▼
-[INITIAL] → Envia boas-vindas e pede e-mail
-    │
-    ▼
-[AWAITING_EMAIL] → Busca usuário no GLPI por e-mail
-    │ encontrado
-    ▼
-[AWAITING_TYPE] → Menu: 1=Incidente / 2=Requisição
-    │
-    ▼
-[AWAITING_DESCRIPTION] → Coleta relato livre (mín. 10 chars)
-    │
-    ▼
-[AWAITING_URGENCY] → Menu: 1 a 5
-    │
-    ▼
-[AWAITING_CATEGORY] → Lista categorias do GLPI filtradas por tipo
-    │
-    ▼
-[AWAITING_CONFIRMATION] → Exibe resumo: 1=Confirmar / 2=Corrigir / 0=Cancelar
-    │ confirma
-    ▼
-[COMPLETED] → Chamado criado no GLPI → Envia #ID e link
-
-Interrupções a qualquer momento:
-  "humano" | "atendente" | "ajuda" → [TRANSFERRED] (WhaTicket)
-  3 tentativas inválidas seguidas → [TRANSFERRED] (WhaTicket)
-  Sessão inativa por 30min → reinício automático na próxima mensagem
-```
-
----
-
-## Arquitetura
-
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│                         backend-main                                  │
-│                                                                        │
-│  POST /webhook/evolution ──▶ webhook.controller                        │
-│                                      │                                 │
-│                              conversation.service                      │
-│                              (Session ↔ PostgreSQL)                    │
-│                                      │                                 │
-│                              triagem.service                           │
-│                              (State Machine ITIL)                      │
-│                                      │                                 │
-│                    ┌─────────────────┴──────────────────┐             │
-│                    │                                    │             │
-│             glpi.service                    evolution.service          │
-│             (REST GLPI)                     (envio WhatsApp)           │
-│                    │                                    │             │
-│             ┌──────┴──────┐                    Evolution API           │
-│          Usuário GLPI  Chamado GLPI             (container)            │
-│          (busca email) (POST /Ticket)                  │              │
-│                                                        │              │
-│  POST /webhook/whaticket ──▶ webhook.controller        │              │
-│  (ticket fechado no WhaTicket)      │                  │              │
-│                              Atualiza GLPI             ▼              │
-│                              ticket → SOLVED      WhatsApp            │
-└──────────────────────────────────────────────────────────────────────┘
-```
-
----
+> Nunca envie o `.env` para o Git. Ele já está no `.gitignore`.
 
 ## Endpoints
 
-### Públicos (requerem `x-webhook-secret`)
+| Método | Rota | Proteção | Função |
+| --- | --- | --- | --- |
+| `POST` | `/webhook/evolution` | `x-webhook-secret` | Mensagens recebidas do WhatsApp |
+| `POST` | `/webhook/whaticket` | `x-whaticket-secret` | Ticket fechado no WhaTicket |
+| `GET` | `/webhook/health` | nenhuma | Health check |
+| `GET` | `/api/glpi/categories?type=1\|2` | `x-api-key` | Categorias do GLPI |
+| `GET` | `/api/glpi/users?email=` | `x-api-key` | Busca de usuário no GLPI |
 
-| Método | Rota | Descrição |
-|---|---|---|
-| `POST` | `/webhook/evolution` | Recebe mensagens da Evolution API |
-| `POST` | `/webhook/whaticket` | Recebe eventos de fechamento do WhaTicket |
-| `GET` | `/webhook/health` | Health check |
+## Integração com o WhaTicket
 
-### Internos (requerem `x-api-key`)
-
-| Método | Rota | Descrição |
-|---|---|---|
-| `GET` | `/api/glpi/categories?type=1\|2` | Lista categorias do GLPI |
-| `GET` | `/api/glpi/users?email=` | Busca usuário no GLPI por e-mail |
-
-### Painel Admin
-
-| Rota | Descrição |
-|---|---|
-| `/admin` | AdminJS — visualização e gestão de sessões ativas |
-
----
-
-## Variáveis de Ambiente
-
-Arquivo: `backend-main/.env` (copie de `.env.example`)
-
-```env
-# Servidor
-PORT=3001
-NODE_ENV=development
-
-# Banco de Dados
-DB_DIALECT=postgres
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=chamados_db
-DB_USER=chamados_user
-DB_PASSWORD=sua_senha
-
-# GLPI
-GLPI_BASE_URL=http://glpi.empresa.com/apirest.php
-GLPI_APP_TOKEN=app_token_do_glpi
-GLPI_USER_TOKEN=user_token_do_tecnico_api
-GLPI_PORTAL_URL=http://glpi.empresa.com
-GLPI_REQUEST_TYPE_ID=1        # ID da fonte de requisição (1=Helpdesk)
-GLPI_ENTITY_ID=0              # Entidade padrão (0=raiz)
-
-# Evolution API
-EVOLUTION_API_URL=http://localhost:8080
-EVOLUTION_API_KEY=chave_da_evolution
-EVOLUTION_INSTANCE=suporte
-
-# WhaTicket
-WHATICKET_WEBHOOK_SECRET=secret_do_whaticket
-WHATICKET_API_URL=http://localhost:3000
-
-# Segurança
-WEBHOOK_SECRET=secret_para_evolution_webhook
-ADMIN_SECRET=api_key_para_endpoints_internos
-ADMIN_EMAIL=admin@empresa.com
-ADMIN_PASSWORD=senha_admin_painel
-SESSION_SECRET=string_longa_aleatoria
-
-# Sessão do Bot
-SESSION_TIMEOUT_MINUTES=30
-```
-
----
-
-## Integração GLPI
-
-### Configurar a REST API no GLPI
-
-1. Acesse **Configuração → Geral → API**
-2. Habilite a API REST
-3. Crie um **Application Token** para esta integração
-4. Crie um usuário técnico dedicado e gere seu **User Token** em **Preferências → Segurança**
-5. Configure `GLPI_APP_TOKEN` e `GLPI_USER_TOKEN` no `.env`
-
-### Fonte de Requisição "WhatsApp"
-
-Para identificar os chamados como originados do WhatsApp no GLPI:
-
-1. Acesse **Configuração → Listas suspensas → Origem das requisições**
-2. Crie um item "WhatsApp"
-3. Anote o ID gerado e configure em `GLPI_REQUEST_TYPE_ID`
-
-### Payload criado no GLPI
-
-```json
-{
-  "input": {
-    "name": "[Incidente] Infraestrutura - Servidor sem acesso...",
-    "content": "## Chamado aberto via WhatsApp\n**Solicitante:** João Silva...",
-    "type": 1,
-    "urgency": 4,
-    "impact": 4,
-    "itilcategories_id": 12,
-    "_users_id_requester": 5,
-    "users_id_recipient": 5,
-    "requesttypes_id": 6,
-    "entities_id": 0
-  }
-}
-```
-
----
-
-## Integração Evolution API
-
-A Evolution API deve estar configurada com webhook global apontando para o backend:
-
-```
-WEBHOOK_GLOBAL_URL=http://backend:3001/webhook/evolution
-WEBHOOK_EVENTS_MESSAGES_UPSERT=true
-WEBHOOK_EVENTS_CONNECTION_UPDATE=true
-```
-
-O backend só processa mensagens com `event = messages.upsert` e `fromMe = false`. Mensagens de grupos (`@g.us`) são descartadas automaticamente.
-
----
-
-## Integração WhaTicket
-
-O WhaTicket é usado para transbordo humano quando:
-- O usuário digita "humano", "atendente" ou "ajuda"
-- O bot atinge 3 tentativas inválidas consecutivas
-
-Para sincronizar o fechamento de tickets de volta ao GLPI, adicione no código do WhaTicket (`services/wbotMessageListener.ts`):
+Para o fechamento no WhaTicket solucionar o chamado no GLPI, envie este evento quando um ticket for fechado:
 
 ```typescript
-import axios from 'axios';
-
-// Quando um ticket for fechado no WhaTicket:
-if (ticket.status === 'closed') {
-  await axios.post(
-    `${process.env.CHAMADOS_BACKEND_URL}/webhook/whaticket`,
-    {
-      event: 'ticket.closed',
-      ticket: {
-        id: ticket.id,
-        status: 'closed',
-        contact: { number: ticket.contact.number }
-      }
-    },
-    {
-      headers: {
-        'x-whaticket-secret': process.env.WHATICKET_WEBHOOK_SECRET
-      }
-    }
-  );
-}
+await axios.post(`${process.env.CHAMADOS_BACKEND_URL}/webhook/whaticket`, {
+  event: 'ticket.closed',
+  ticket: { id: ticket.id, status: 'closed', contact: { number: ticket.contact.number } },
+}, { headers: { 'x-whaticket-secret': process.env.WHATICKET_WEBHOOK_SECRET } });
 ```
 
-Adicione ao `.env` do WhaTicket:
-```env
-CHAMADOS_BACKEND_URL=http://backend:3001
-WHATICKET_WEBHOOK_SECRET=mesmo_valor_do_backend
-```
-
----
-
-## Painel Administrativo
-
-Acesse `http://localhost:3001/admin` com as credenciais `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
-
-Funcionalidades disponíveis:
-- Visualizar todas as sessões de conversação ativas
-- Filtrar por estado (`AWAITING_EMAIL`, `COMPLETED`, etc.) ou número de telefone
-- Deletar sessões manualmente (útil para resetar um atendimento travado)
-
----
-
-## Estrutura de Diretórios
+## Estrutura
 
 ```
-D:\Projects\Chamados\
-├── CLAUDE.md                          ← Guia para Claude Code
-├── README.md                          ← Esta documentação
-│
+├── docker-compose.yml
 ├── backend-main/
-│   ├── admin/adminjs.config.ts        ← Painel AdminJS
-│   ├── src/
-│   │   ├── app.ts                     ← Entry point Express
-│   │   ├── config/                    ← database, glpi, evolution
-│   │   ├── controllers/
-│   │   │   ├── webhook.controller.ts  ← Entry dos webhooks (Evolution + WhaTicket)
-│   │   │   └── glpi.controller.ts     ← Consultas GLPI (categorias, usuários)
-│   │   ├── services/
-│   │   │   ├── triagem.service.ts     ← State machine ITIL (núcleo do bot)
-│   │   │   ├── conversation.service.ts← Orquestra sessões e respostas
-│   │   │   ├── glpi.service.ts        ← Client REST GLPI
-│   │   │   └── evolution.service.ts   ← Envio de mensagens WhatsApp
-│   │   ├── models/session.model.ts    ← Sessão de conversação (Sequelize)
-│   │   ├── routes/                    ← webhook.routes, admin.routes
-│   │   ├── middlewares/auth.middleware.ts
-│   │   ├── types/                     ← glpi.types, conversation.types, evolution.types
-│   │   └── utils/
-│   │       ├── payload.builder.ts     ← Monta GlpiTicketPayload + confirmação
-│   │       └── logger.ts              ← Winston
-│   ├── docker-compose.yml
-│   ├── Dockerfile
-│   └── .env.example
-│
-└── frontend-main/
-    ├── src/
-    │   ├── app/                       ← layout, dashboard, tickets (Next.js App Router)
-    │   ├── components/                ← TicketCard, StatusBadge
-    │   ├── services/api.ts            ← Axios client
-    │   └── types/ticket.types.ts      ← Labels e interfaces de chamados
-    └── next.config.js
+│   └── src/
+│       ├── app.ts                    # Express, rotinas agendadas e AdminJS
+│       ├── controllers/              # webhooks e consultas ao GLPI
+│       ├── services/
+│       │   ├── triagem.service.ts    # máquina de estados da conversa (ITIL)
+│       │   ├── conversation.service.ts
+│       │   ├── glpi.service.ts       # cliente da REST API do GLPI
+│       │   ├── evolution.service.ts  # envio de mensagens
+│       │   ├── registration.service.ts       # autocadastro
+│       │   └── ticket-notification.service.ts # avisos de andamento
+│       ├── models/                   # sessões, cadastros pendentes, notificações
+│       └── middlewares/              # autenticação dos webhooks e da API
+└── frontend-main/                    # painel Next.js
 ```
 
----
+## Autor
 
-## Licença
-
-Projeto proprietário — uso interno corporativo.
-#   G L P I _ W h a t s A p p  
- 
+**Fábio Venceslau** · Analista de Redes NOC/SOC
+[Portfólio](https://fbvenceslau.github.io) · [LinkedIn](https://www.linkedin.com/in/fabio-venceslau/)
